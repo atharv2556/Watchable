@@ -2,18 +2,21 @@
    WATCHABLE INTERACTIVE LOGIC & ENGINE
    ========================================== */
 
-// 1. SUPABASE CLIENT INITIALIZATION
-const supabaseUrl = 'https://sebusfrzbejgjnlmsfvv.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlYnVzZnJ6YmVqZ2pubG1zZnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTQxMTAsImV4cCI6MjA5OTE3MDExMH0.DfzXBl0bk-EpY-cYInA1FzybZM8_oObEj2RyhPsiw8s';
-
-let supabase;
-if (window.supabase) {
-    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-} else {
-    console.error("Supabase SDK not loaded. Reverting to static fallback mode.");
-}
-
 document.addEventListener('DOMContentLoaded', async () => {
+
+    // Load .env configuration dynamically
+    const env = await window.WatchableAuth.loadEnvConfig();
+
+    // 1. SUPABASE CLIENT INITIALIZATION
+    const supabaseUrl = env.SUPABASE_URL || 'https://sebusfrzbejgjnlmsfvv.supabase.co';
+    const supabaseKey = env.SUPABASE_ANON_KEY || '';
+
+    let supabase;
+    if (window.supabase && supabaseUrl && supabaseKey) {
+        supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    } else {
+        console.error("Supabase SDK not loaded or environment credentials missing. Reverting to static fallback mode.");
+    }
 
     // 2. STICKY HEADER SCROLL EFFECT
     const header = document.getElementById('header');
@@ -208,10 +211,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 5. CATALOG FILTER SYSTEM
-    const filterButtons = document.querySelectorAll('.filter-btn');
-
     function initCatalogFilters() {
         const watchCards = document.querySelectorAll('.watch-card');
+        const filterButtons = document.querySelectorAll('.filter-btn');
         
         filterButtons.forEach(btn => {
             // Remove previous listeners (by cloning and replacing, or simple checks)
@@ -782,6 +784,401 @@ document.addEventListener('DOMContentLoaded', async () => {
             await fetchCart();
         });
     }
+
+    /* ==========================================================
+       WATCHABLE GOOGLE OAUTH & PROFILE ENCRYPTION CONTROLLER
+       ========================================================== */
+
+    // DOM Elements
+    const authToggleBtn = document.getElementById('authToggleBtn');
+    const userDropdownMenu = document.getElementById('userDropdownMenu');
+    const btnShowAuthModal = document.getElementById('btnShowAuthModal');
+    const btnShowConfigModal = document.getElementById('btnShowConfigModal');
+    const btnSignOut = document.getElementById('btnSignOut');
+    
+    const authModal = document.getElementById('authModal');
+    const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+    const authModalOverlay = document.getElementById('authModalOverlay');
+    const modalTabBtns = document.querySelectorAll('.modal-tab-btn');
+    const modalTabContents = document.querySelectorAll('.modal-tab-content');
+    
+    const authStateSignedOut = document.getElementById('authStateSignedOut');
+    const authStateSignedIn = document.getElementById('authStateSignedIn');
+    
+    const userAvatarImg = document.getElementById('userAvatarImg');
+    const userStatusDot = document.getElementById('userStatusDot');
+    const dropdownUsername = document.getElementById('dropdownUsername');
+    const dropdownEmail = document.getElementById('dropdownEmail');
+    
+    const profileDetailAvatar = document.getElementById('profileDetailAvatar');
+    const profileDetailName = document.getElementById('profileDetailName');
+    const profileDetailEmail = document.getElementById('profileDetailEmail');
+    const decryptedPayloadJson = document.getElementById('decryptedPayloadJson');
+    
+    const btnSignOutModal = document.getElementById('btnSignOutModal');
+    
+    // Config Form Elements
+    const configForm = document.getElementById('configForm');
+    const configClientId = document.getElementById('configClientId');
+    const configClientSecret = document.getElementById('configClientSecret');
+    const configEncryptionKey = document.getElementById('configEncryptionKey');
+    const btnGenerateKey = document.getElementById('btnGenerateKey');
+    const btnResetConfig = document.getElementById('btnResetConfig');
+
+    // 1. Toggle User Dropdown Menu
+    if (authToggleBtn) {
+        authToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdownMenu.classList.toggle('active');
+        });
+    }
+
+    // Close user dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (userDropdownMenu && !userDropdownMenu.contains(e.target) && e.target !== authToggleBtn) {
+            userDropdownMenu.classList.remove('active');
+        }
+    });
+
+    // 2. Tab Navigation inside Auth Modal
+    modalTabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            modalTabBtns.forEach(b => b.classList.remove('active'));
+            modalTabContents.forEach(c => c.classList.remove('active'));
+            
+            btn.classList.add('active');
+            const targetTab = btn.getAttribute('data-tab');
+            const tabContent = document.getElementById(targetTab);
+            if (tabContent) tabContent.classList.add('active');
+        });
+    });
+
+    // 3. Open Modal helpers
+    function openModalToTab(tabId) {
+        if (!authModal) return;
+        authModal.classList.add('active');
+        userDropdownMenu.classList.remove('active');
+        
+        // Activate matching tab button
+        modalTabBtns.forEach(btn => {
+            if (btn.getAttribute('data-tab') === tabId) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        // Show matching tab content
+        modalTabContents.forEach(content => {
+            if (content.id === tabId) {
+                content.classList.add('active');
+            } else {
+                content.classList.remove('active');
+            }
+        });
+    }
+
+    if (btnShowAuthModal) {
+        btnShowAuthModal.addEventListener('click', () => openModalToTab('tab-signin'));
+    }
+    if (btnShowConfigModal) {
+        btnShowConfigModal.addEventListener('click', () => openModalToTab('tab-config'));
+    }
+
+    // Close Modals
+    if (closeAuthModalBtn) closeAuthModalBtn.addEventListener('click', () => authModal.classList.remove('active'));
+    if (authModalOverlay) authModalOverlay.addEventListener('click', () => authModal.classList.remove('active'));
+
+    // 4. Developer Configuration Manager
+    function loadConfigInputs() {
+        const config = window.WatchableAuth.getAuthConfig();
+        if (configClientId) configClientId.value = config.googleClientId;
+        if (configClientSecret) configClientSecret.value = config.googleClientSecret;
+        if (configEncryptionKey) configEncryptionKey.value = config.encryptionSecretKey;
+    }
+
+    loadConfigInputs(); // Initialize input values
+
+    // Key Generator (Generates a secure 16-character key)
+    if (btnGenerateKey) {
+        btnGenerateKey.addEventListener('click', () => {
+            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+            let result = '';
+            for (let i = 0; i < 16; i++) {
+                result += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            configEncryptionKey.value = result;
+        });
+    }
+
+    // Save configuration
+    if (configForm) {
+        configForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            window.WatchableAuth.saveAuthConfig(
+                configClientId.value,
+                configClientSecret.value,
+                configEncryptionKey.value
+            );
+            alert("Developer Configuration Saved successfully!\n\nRe-initializing Google Sign-in Client with new credentials...");
+            initGoogleSignIn();
+        });
+    }
+
+    // Reset configuration
+    if (btnResetConfig) {
+        btnResetConfig.addEventListener('click', () => {
+            if (confirm("Are you sure you want to reset configuration? This will restore defaults and clear localStorage settings.")) {
+                window.WatchableAuth.resetAuthConfig();
+                loadConfigInputs();
+                alert("Configuration reset to defaults.");
+                initGoogleSignIn();
+            }
+        });
+    }
+
+    // 5. Initialize Google Sign-in SDK Client
+    function initGoogleSignIn() {
+        const config = window.WatchableAuth.getAuthConfig();
+        const googleBtnContainer = document.getElementById('google-signin-btn');
+        
+        if (!googleBtnContainer) return;
+        googleBtnContainer.innerHTML = ''; // Clear previous button or message
+
+        if (!config.googleClientId) {
+            googleBtnContainer.innerHTML = `
+                <div class="auth-no-client" style="text-align: center; color: var(--accent-gold); padding: 10px; border: 1px dashed var(--border-gold); border-radius: 4px;">
+                    <p style="font-size: 0.85rem; margin-bottom: 5px;">⚠️ Google Client ID not configured</p>
+                    <button class="btn-small-action" onclick="document.querySelector('[data-tab=tab-config]').click()" style="padding: 4px 8px;">Configure Now</button>
+                </div>
+            `;
+            return;
+        }
+
+        try {
+            if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+                // If the GSI SDK script isn't loaded yet, try again in 500ms
+                setTimeout(initGoogleSignIn, 500);
+                return;
+            }
+
+            google.accounts.id.initialize({
+                client_id: config.googleClientId,
+                callback: handleGoogleSignInSuccess
+            });
+
+            google.accounts.id.renderButton(
+                googleBtnContainer,
+                { 
+                    theme: "outline", 
+                    size: "large", 
+                    width: "320", 
+                    text: "signin_with",
+                    shape: "rectangular"
+                }
+            );
+        } catch (err) {
+            console.error("Error initializing Google OAuth SDK:", err);
+            googleBtnContainer.innerHTML = `<p style="color: red; font-size: 0.8rem;">Failed to initialize Google Sign-in: ${err.message}</p>`;
+        }
+    }
+
+    // Google Sign-In SDK Credential Callback
+    async function handleGoogleSignInSuccess(response) {
+        if (!supabase) {
+            alert("Supabase is not initialized. Cannot sign in.");
+            return;
+        }
+        
+        const idToken = response.credential;
+        
+        try {
+            // Sign in to Supabase Auth with Google ID Token
+            const { data, error } = await supabase.auth.signInWithIdToken({
+                provider: 'google',
+                token: idToken
+            });
+            
+            if (error) throw error;
+            
+            alert("Successfully authenticated with Google through Supabase Auth!");
+        } catch (err) {
+            console.error("Supabase Authentication Error:", err);
+            alert(`Authentication failed: ${err.message}`);
+        }
+    }
+
+    // 6. Handle Encrypted Data Synchronization and Profile View Updates
+    async function syncAndLoadUserProfile(session) {
+        if (!supabase || !session || !session.user) return;
+        
+        const user = session.user;
+        const profileId = user.id;
+        
+        try {
+            // Check if profile exists in public.encrypted_user_profiles
+            const { data: existingProfile, error: selectError } = await supabase
+                .from('encrypted_user_profiles')
+                .select('*')
+                .eq('id', profileId)
+                .maybeSingle();
+                
+            if (selectError) throw selectError;
+            
+            let encryptedRow;
+            
+            if (!existingProfile) {
+                // Profile doesn't exist - this is a new signup registration!
+                // Extract metadata from oauth provider
+                const name = user.user_metadata.full_name || user.user_metadata.name || 'Watchable User';
+                const email = user.email || '';
+                const avatar = user.user_metadata.avatar_url || '';
+                
+                // Encrypt details client-side using CryptoJS before sending
+                const encEmail = window.WatchableAuth.encryptData(email);
+                const encName = window.WatchableAuth.encryptData(name);
+                const encAvatar = window.WatchableAuth.encryptData(avatar);
+                
+                // Save encrypted profile row to Supabase
+                const { data: newProfile, error: insertError } = await supabase
+                    .from('encrypted_user_profiles')
+                    .insert({
+                        id: profileId,
+                        encrypted_email: encEmail,
+                        encrypted_name: encName,
+                        encrypted_avatar_url: encAvatar
+                    })
+                    .select()
+                    .single();
+                    
+                if (insertError) throw insertError;
+                encryptedRow = newProfile;
+            } else {
+                // Profile already exists - this is a login!
+                encryptedRow = existingProfile;
+            }
+            
+            // Decrypt the details client-side
+            const decryptedName = window.WatchableAuth.decryptData(encryptedRow.encrypted_name);
+            const decryptedEmail = window.WatchableAuth.decryptData(encryptedRow.encrypted_email);
+            const decryptedAvatar = window.WatchableAuth.decryptData(encryptedRow.encrypted_avatar_url);
+            
+            // 7. Update UI elements with Decrypted details
+            // Update Header actions
+            if (dropdownUsername) dropdownUsername.textContent = decryptedName;
+            if (dropdownEmail) dropdownEmail.textContent = decryptedEmail;
+            if (userStatusDot) userStatusDot.classList.add('signed-in');
+            
+            // Update Header Avatar
+            if (decryptedAvatar && userAvatarImg) {
+                userAvatarImg.src = decryptedAvatar;
+                userAvatarImg.style.display = 'block';
+                const avatarIcon = document.querySelector('.icon-avatar-default');
+                if (avatarIcon) avatarIcon.style.display = 'none';
+            }
+            
+            // Update Modal Profile Panel
+            if (profileDetailName) profileDetailName.textContent = decryptedName;
+            if (profileDetailEmail) profileDetailEmail.textContent = decryptedEmail;
+            
+            if (decryptedAvatar && profileDetailAvatar) {
+                profileDetailAvatar.src = decryptedAvatar;
+                profileDetailAvatar.style.display = 'block';
+                const avatarDetailIcon = document.querySelector('.icon-avatar-detail-default');
+                if (avatarDetailIcon) avatarDetailIcon.style.display = 'none';
+            }
+            
+            // Display encrypted and decrypted JSON payload in config preview
+            if (decryptedPayloadJson) {
+                const payload = {
+                    database_status: "SUCCESSFULLY_RETRIEVED",
+                    raw_database_payload: {
+                        id: encryptedRow.id,
+                        encrypted_name: encryptedRow.encrypted_name.substring(0, 15) + "...",
+                        encrypted_email: encryptedRow.encrypted_email.substring(0, 15) + "...",
+                        encrypted_avatar_url: encryptedRow.encrypted_avatar_url ? (encryptedRow.encrypted_avatar_url.substring(0, 15) + "...") : null,
+                        created_at: encryptedRow.created_at
+                    },
+                    decrypted_client_side: {
+                        name: decryptedName,
+                        email: decryptedEmail,
+                        avatar_url: decryptedAvatar
+                    }
+                };
+                decryptedPayloadJson.textContent = JSON.stringify(payload, null, 2);
+            }
+            
+            // Update button visibility
+            if (btnShowAuthModal) btnShowAuthModal.style.display = 'none';
+            if (btnSignOut) btnSignOut.style.display = 'block';
+            if (authStateSignedOut) authStateSignedOut.style.display = 'none';
+            if (authStateSignedIn) authStateSignedIn.style.display = 'block';
+            
+        } catch (err) {
+            console.error("Error loading or synchronizing encrypted user profile:", err);
+            if (decryptedPayloadJson) {
+                decryptedPayloadJson.textContent = `Error syncing profile: ${err.message}`;
+            }
+        }
+    }
+
+    // 8. Reset UI state on Sign Out
+    function handleSignedOutUI() {
+        if (dropdownUsername) dropdownUsername.textContent = 'Guest User';
+        if (dropdownEmail) dropdownEmail.textContent = 'Not signed in';
+        if (userStatusDot) userStatusDot.classList.remove('signed-in');
+        
+        if (userAvatarImg) {
+            userAvatarImg.src = '';
+            userAvatarImg.style.display = 'none';
+        }
+        const avatarIcon = document.querySelector('.icon-avatar-default');
+        if (avatarIcon) avatarIcon.style.display = 'block';
+        
+        const avatarDetailIcon = document.querySelector('.icon-avatar-detail-default');
+        if (avatarDetailIcon) avatarDetailIcon.style.display = 'block';
+        if (profileDetailAvatar) {
+            profileDetailAvatar.src = '';
+            profileDetailAvatar.style.display = 'none';
+        }
+        
+        if (btnShowAuthModal) btnShowAuthModal.style.display = 'block';
+        if (btnSignOut) btnSignOut.style.display = 'none';
+        if (authStateSignedOut) authStateSignedOut.style.display = 'block';
+        if (authStateSignedIn) authStateSignedIn.style.display = 'none';
+    }
+
+    // Sign Out Handlers
+    async function executeSignOut() {
+        if (!supabase) return;
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error("Error signing out:", error);
+            alert(`Logout failed: ${error.message}`);
+        } else {
+            handleSignedOutUI();
+            alert("Signed out successfully!");
+            if (authModal) authModal.classList.remove('active');
+        }
+    }
+
+    if (btnSignOut) btnSignOut.addEventListener('click', executeSignOut);
+    if (btnSignOutModal) btnSignOutModal.addEventListener('click', executeSignOut);
+
+    // 9. Subscribe to Supabase Auth State Changes
+    if (supabase) {
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log("Supabase Auth State Change Event:", event);
+            if (session) {
+                await syncAndLoadUserProfile(session);
+            } else {
+                handleSignedOutUI();
+            }
+        });
+    }
+
+    // Initialize Google Button
+    initGoogleSignIn();
 
     // Initialize Database Loading Actions
     renderWatches(); // Render static fallbacks immediately

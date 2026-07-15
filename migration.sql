@@ -232,3 +232,34 @@ VALUES
 ON CONFLICT (term) DO UPDATE 
 SET category = EXCLUDED.category,
     definition = EXCLUDED.definition;
+
+-- Create encrypted_user_profiles table
+CREATE TABLE IF NOT EXISTS public.encrypted_user_profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    encrypted_email TEXT NOT NULL,
+    encrypted_name TEXT,
+    encrypted_avatar_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.encrypted_user_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Allow users to insert their own encrypted profile
+DROP POLICY IF EXISTS "Allow users to insert their own profile" ON public.encrypted_user_profiles;
+CREATE POLICY "Allow users to insert their own profile" 
+ON public.encrypted_user_profiles FOR INSERT 
+WITH CHECK (auth.uid() = id);
+
+-- Allow users to select their own encrypted profile
+DROP POLICY IF EXISTS "Allow users to view their own profile" ON public.encrypted_user_profiles;
+CREATE POLICY "Allow users to view their own profile" 
+ON public.encrypted_user_profiles FOR SELECT 
+USING (auth.uid() = id);
+
+-- Allow users to update their own encrypted profile
+DROP POLICY IF EXISTS "Allow users to update their own profile" ON public.encrypted_user_profiles;
+CREATE POLICY "Allow users to update their own profile" 
+ON public.encrypted_user_profiles FOR UPDATE 
+USING (auth.uid() = id)
+WITH CHECK (auth.uid() = id);
