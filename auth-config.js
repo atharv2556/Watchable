@@ -35,7 +35,9 @@ async function loadEnvConfig() {
 const DEFAULT_CONFIG = {
     googleClientId: '',     // Loaded from .env or configured in UI
     googleClientSecret: '', // Loaded from .env or configured in UI
-    encryptionSecretKey: 'watchable-default-secure-key-1992' // Default AES key
+    encryptionSecretKey: 'watchable-default-secure-key-1992', // Default AES key
+    supabaseUrl: 'https://sebusfrzbejgjnlmsfvv.supabase.co',
+    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlYnVzZnJ6YmVqZ2pubG1zZnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTQxMTAsImV4cCI6MjA5OTE3MDExMH0.DfzXBl0bk-EpY-cYInA1FzybZM8_oObEj2RyhPsiw8s'
 };
 
 // 2. RETRIEVE CONFIGURATION STATE
@@ -44,19 +46,25 @@ function getAuthConfig() {
     const localId = localStorage.getItem('watchable_google_client_id');
     const localSecret = localStorage.getItem('watchable_google_client_secret');
     const localKey = localStorage.getItem('watchable_encryption_key');
+    const localSupabaseUrl = localStorage.getItem('watchable_supabase_url');
+    const localSupabaseAnonKey = localStorage.getItem('watchable_supabase_anon_key');
     
     return {
         googleClientId: envConfig.GOOGLE_CLIENT_ID || localId || DEFAULT_CONFIG.googleClientId,
         googleClientSecret: envConfig.GOOGLE_CLIENT_SECRET || localSecret || DEFAULT_CONFIG.googleClientSecret,
-        encryptionSecretKey: envConfig.AES_ENCRYPTION_SECRET || localKey || DEFAULT_CONFIG.encryptionSecretKey
+        encryptionSecretKey: envConfig.AES_ENCRYPTION_SECRET || localKey || DEFAULT_CONFIG.encryptionSecretKey,
+        supabaseUrl: envConfig.SUPABASE_URL || localSupabaseUrl || DEFAULT_CONFIG.supabaseUrl,
+        supabaseAnonKey: envConfig.SUPABASE_ANON_KEY || localSupabaseAnonKey || DEFAULT_CONFIG.supabaseAnonKey
     };
 }
 
 // 3. PERSIST CONFIGURATION STATE
-function saveAuthConfig(clientId, clientSecret, encryptionKey) {
+function saveAuthConfig(clientId, clientSecret, encryptionKey, supabaseUrl, supabaseAnonKey) {
     localStorage.setItem('watchable_google_client_id', clientId ? clientId.trim() : '');
     localStorage.setItem('watchable_google_client_secret', clientSecret ? clientSecret.trim() : '');
     localStorage.setItem('watchable_encryption_key', encryptionKey ? encryptionKey.trim() : '');
+    localStorage.setItem('watchable_supabase_url', supabaseUrl ? supabaseUrl.trim() : '');
+    localStorage.setItem('watchable_supabase_anon_key', supabaseAnonKey ? supabaseAnonKey.trim() : '');
 }
 
 // 4. RESET CONFIGURATION STATE
@@ -64,6 +72,8 @@ function resetAuthConfig() {
     localStorage.removeItem('watchable_google_client_id');
     localStorage.removeItem('watchable_google_client_secret');
     localStorage.removeItem('watchable_encryption_key');
+    localStorage.removeItem('watchable_supabase_url');
+    localStorage.removeItem('watchable_supabase_anon_key');
 }
 
 // 5. ENCRYPT DATA CLIENT-SIDE (AES-256)

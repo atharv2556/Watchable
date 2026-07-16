@@ -5,18 +5,40 @@
 document.addEventListener('DOMContentLoaded', async () => {
 
     // Load .env configuration dynamically
-    const env = await window.WatchableAuth.loadEnvConfig();
+    await window.WatchableAuth.loadEnvConfig();
 
     // 1. SUPABASE CLIENT INITIALIZATION
-    const supabaseUrl = env.SUPABASE_URL || 'https://sebusfrzbejgjnlmsfvv.supabase.co';
-    const supabaseKey = env.SUPABASE_ANON_KEY || '';
-
     let supabase;
-    if (window.supabase && supabaseUrl && supabaseKey) {
-        supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-    } else {
-        console.error("Supabase SDK not loaded or environment credentials missing. Reverting to static fallback mode.");
+    function initSupabase() {
+        const authConfig = window.WatchableAuth.getAuthConfig();
+        const supabaseUrl = authConfig.supabaseUrl;
+        const supabaseKey = authConfig.supabaseAnonKey;
+
+        if (window.supabase && supabaseUrl && supabaseKey) {
+            try {
+                supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+                console.log("Supabase Client initialized successfully.");
+                
+                // Subscribe to Supabase Auth State Changes on the current client
+                supabase.auth.onAuthStateChange(async (event, session) => {
+                    console.log("Supabase Auth State Change Event:", event);
+                    if (session) {
+                        await syncAndLoadUserProfile(session);
+                    } else {
+                        handleSignedOutUI();
+                    }
+                });
+            } catch (err) {
+                console.error("Failed to create Supabase client:", err);
+                supabase = null;
+            }
+        } else {
+            console.error("Supabase SDK not loaded or environment credentials missing. Reverting to static fallback mode.");
+            supabase = null;
+        }
     }
+    
+    initSupabase();
 
     // 2. STICKY HEADER SCROLL EFFECT
     const header = document.getElementById('header');
@@ -821,6 +843,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const configForm = document.getElementById('configForm');
     const configClientId = document.getElementById('configClientId');
     const configClientSecret = document.getElementById('configClientSecret');
+    const configSupabaseUrl = document.getElementById('configSupabaseUrl');
+    const configSupabaseAnonKey = document.getElementById('configSupabaseAnonKey');
     const configEncryptionKey = document.getElementById('configEncryptionKey');
     const btnGenerateKey = document.getElementById('btnGenerateKey');
     const btnResetConfig = document.getElementById('btnResetConfig');
@@ -894,6 +918,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const config = window.WatchableAuth.getAuthConfig();
         if (configClientId) configClientId.value = config.googleClientId;
         if (configClientSecret) configClientSecret.value = config.googleClientSecret;
+        if (configSupabaseUrl) configSupabaseUrl.value = config.supabaseUrl;
+        if (configSupabaseAnonKey) configSupabaseAnonKey.value = config.supabaseAnonKey;
         if (configEncryptionKey) configEncryptionKey.value = config.encryptionSecretKey;
     }
 
@@ -918,10 +944,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.WatchableAuth.saveAuthConfig(
                 configClientId.value,
                 configClientSecret.value,
-                configEncryptionKey.value
+                configEncryptionKey.value,
+                configSupabaseUrl.value,
+                configSupabaseAnonKey.value
             );
-            alert("Developer Configuration Saved successfully!\n\nRe-initializing Google Sign-in Client with new credentials...");
+            alert("Developer Configuration Saved successfully!\n\nRe-initializing Supabase and Google Sign-in Clients with new credentials...");
+            initSupabase();
             initGoogleSignIn();
+            loadWatches();
+            loadWikiTerms();
+            fetchCart();
         });
     }
 
@@ -932,7 +964,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 window.WatchableAuth.resetAuthConfig();
                 loadConfigInputs();
                 alert("Configuration reset to defaults.");
+                initSupabase();
                 initGoogleSignIn();
+                loadWatches();
+                loadWikiTerms();
+                fetchCart();
             }
         });
     }
@@ -1165,17 +1201,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnSignOut) btnSignOut.addEventListener('click', executeSignOut);
     if (btnSignOutModal) btnSignOutModal.addEventListener('click', executeSignOut);
 
-    // 9. Subscribe to Supabase Auth State Changes
-    if (supabase) {
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log("Supabase Auth State Change Event:", event);
-            if (session) {
-                await syncAndLoadUserProfile(session);
-            } else {
-                handleSignedOutUI();
-            }
-        });
-    }
+
 
     // Initialize Google Button
     initGoogleSignIn();

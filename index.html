@@ -701,7 +701,7 @@
             
             <div class="modal-tab-content" id="tab-config">
                 <h3 class="modal-title">Developer Configuration</h3>
-                <p class="modal-desc">Enter your Google OAuth credentials and AES encryption keys. These parameters will be stored in your browser's Local Storage for testing purposes.</p>
+                <p class="modal-desc">Enter your Google OAuth credentials, Supabase connection details, and AES encryption keys. These parameters will be stored in your browser's Local Storage for testing purposes.</p>
                 
                 <form id="configForm" class="config-form">
                     <div class="form-group">
@@ -711,6 +711,14 @@
                     <div class="form-group">
                         <label for="configClientSecret">Google Client Secret (Optional Reference)</label>
                         <input type="password" id="configClientSecret" placeholder="e.g. GOCSPX-xxxxxx">
+                    </div>
+                    <div class="form-group">
+                        <label for="configSupabaseUrl">Supabase URL</label>
+                        <input type="text" id="configSupabaseUrl" placeholder="https://your-project.supabase.co">
+                    </div>
+                    <div class="form-group">
+                        <label for="configSupabaseAnonKey">Supabase Anon Key</label>
+                        <input type="text" id="configSupabaseAnonKey" placeholder="your-anon-key">
                     </div>
                     <div class="form-group">
                         <label for="configEncryptionKey">AES Encryption Key</label>
